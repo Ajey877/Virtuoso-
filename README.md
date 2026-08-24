@@ -1,20 +1,39 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Virtuoso — World Instrument Keyboard Workstation
 
-# Run and deploy your AI Studio app
+Virtuoso is a browser-based music workstation focused on reliable instrument performance, sequencing, MIDI control, recording, editing, mixing, and audio export.
 
-This contains everything you need to run your app locally.
+## Current focus
 
-View your app in AI Studio: https://ai.studio/apps/361ddfe2-2e90-4f12-8443-8719bdc42dd7
+Phase 0 is focused on stability and the core workflow:
 
-## Run Locally
+**Play → Record → Edit → Playback → Export**
 
-**Prerequisites:**  Node.js
+AI features are intentionally disabled for the current product direction.
 
+## Run locally
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+**Prerequisite:** Node.js 22+
+
+```bash
+npm install
+npm run lint
+npm run build
+npm run dev
+```
+
+The development server runs on port 3000.
+
+## Project areas
+
+- Web Audio synthesis and effects
+- Virtual keyboard
+- MIDI input and MIDI learn
+- Piano roll and sequencing
+- Groove sequencing
+- Multitrack recording
+- WAV and MIDI export
+- Instrument and scale systems
+
+## Engineering rule
+
+Core audio reliability comes before adding new features. Timing, note lifecycle, recording, playback, and export must remain stable as the workstation grows.
