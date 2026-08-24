@@ -50,7 +50,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/audio/AudioEngine.ts .github/workflows/patch-audio-cleanup.yml
-          git diff --cached --quiet && exit 0
+          git rm .github/workflows/patch-audio-cleanup.yml
+          git add src/audio/AudioEngine.ts
           git commit -m 'fix: clean up all audio voice source nodes'
           git push
