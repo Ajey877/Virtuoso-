@@ -1,0 +1,20 @@
+name: Import Virtuoso Phase 0
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  import-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore project
+        shell: bash
+        run: |
+          cat > /tmp/virtuoso.b64 <<'PAYLOAD'
