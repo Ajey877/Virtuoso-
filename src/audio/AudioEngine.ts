@@ -512,6 +512,27 @@ export class AudioEngine {
     return 440 * Math.pow(2, totalCents / 1200);
   }
 
+  /** Release and disconnect every node owned by a voice.
+   * Includes AudioBufferSourceNode instances so sampled/noise voices cannot leak after release.
+   */
+  private cleanupVoiceNodes(voice: ActiveVoice): void {
+    voice.nodes.oscillators.forEach((source) => {
+      try { source.stop(); } catch { /* already stopped */ }
+      try { source.disconnect(); } catch { /* already disconnected */ }
+    });
+    voice.nodes.noiseSources.forEach((source) => {
+      try { (source as AudioScheduledSourceNode).stop(); } catch { /* already stopped */ }
+      try { source.disconnect(); } catch { /* already disconnected */ }
+    });
+    voice.nodes.gains.forEach((node) => {
+      try { node.disconnect(); } catch { /* ignore */ }
+    });
+    voice.nodes.filters.forEach((node) => {
+      try { node.disconnect(); } catch { /* ignore */ }
+    });
+    try { voice.nodes.mainGain.disconnect(); } catch { /* ignore */ }
+  }
+
   // --- PLAY NOTE (NOTE ON) ---
   public async playNote(
     rawMidiNote: number,
@@ -603,17 +624,7 @@ export class AudioEngine {
     voice.nodes.mainGain.gain.exponentialRampToValueAtTime(0.0001, stopTime + releaseTime);
 
     setTimeout(() => {
-      voice.nodes.oscillators.forEach((osc) => {
-        try {
-          osc.stop();
-          osc.disconnect();
-        } catch {
-          // ignore
-        }
-      });
-      voice.nodes.gains.forEach((g) => g.disconnect());
-      voice.nodes.filters.forEach((f) => f.disconnect());
-      voice.nodes.mainGain.disconnect();
+      this.cleanupVoiceNodes(voice);
     }, (stopTime + releaseTime - this.ctx.currentTime) * 1000 + 100);
 
     // Trigger visual note event
@@ -678,17 +689,7 @@ export class AudioEngine {
 
     // Cleanup Web Audio nodes after release
     setTimeout(() => {
-      voice.nodes.oscillators.forEach((osc) => {
-        try {
-          osc.stop();
-          osc.disconnect();
-        } catch {
-          // ignore already stopped
-        }
-      });
-      voice.nodes.gains.forEach((g) => g.disconnect());
-      voice.nodes.filters.forEach((f) => f.disconnect());
-      voice.nodes.mainGain.disconnect();
+      this.cleanupVoiceNodes(voice);
     }, releaseTime * 1000 + 100);
 
     this.activeVoices.delete(note);
