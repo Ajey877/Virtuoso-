@@ -1,6 +1,6 @@
 {
-  "name": "COOKUP - Producer Beat & Sound Lab",
-  "description": "Next-gen virtual instrument workstation and beat lab for producers, featuring interactive piano roll, MPC waveform chopper, 16-step groovebox, 808 glides, 8-insert VST FX rack, and 24-bit multitrack stem export.",
+  "name": "Virtuoso - World Instrument Keyboard Workstation",
+  "description": "A browser-based virtual instrument workstation for playing, sequencing, recording, editing, mixing, MIDI control, and audio export.",
   "requestFramePermissions": ["microphone"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }
