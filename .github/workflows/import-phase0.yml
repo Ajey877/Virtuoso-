@@ -3,33 +3,42 @@ name: Import Virtuoso Phase 0
 on:
   push:
     paths:
-      - 'virtuoso-phase0-stability.zip'
+      - 'virtuoso---world-instrument-keyboard-workstation.zip'
+      - '.github/workflows/import-phase0.yml'
 
 permissions:
   contents: write
 
 jobs:
   import:
+    if: ${{ hashFiles('virtuoso---world-instrument-keyboard-workstation.zip') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Extract project
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           rm -rf /tmp/virtuoso
           mkdir -p /tmp/virtuoso
-          unzip -q virtuoso-phase0-stability.zip -d /tmp/virtuoso
+          unzip -q 'virtuoso---world-instrument-keyboard-workstation.zip' -d /tmp/virtuoso
           find /tmp/virtuoso -name .git -type d -prune -exec rm -rf {} +
           rsync -a --exclude='.git/' /tmp/virtuoso/ ./
-          rm -f virtuoso-phase0-stability.zip
-          rm -f .github/workflows/import-phase0.yml
+          rm -f 'virtuoso---world-instrument-keyboard-workstation.zip'
+          rm -f '.github/workflows/import-phase0.yml'
 
       - name: Commit imported project
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
+          if git diff --cached --quiet; then
+            echo 'No imported changes found.'
+            exit 0
+          fi
           git commit -m 'Import Virtuoso Phase 0 stability build'
           git push
