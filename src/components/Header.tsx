@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity,
   Disc,
   Download,
   HelpCircle,
+  Maximize,
+  Minimize,
   Mic,
   Music,
   Power,
@@ -36,11 +38,50 @@ export const Header: React.FC<HeaderProps> = ({
   const engine = AudioEngine.getInstance();
   const [, setTick] = useState(0);
   const [tapTimes, setTapTimes] = useState<number[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const wakeLockRef = useRef<any>(null);
 
   useEffect(() => {
-    const unsub = engine.subscribeStateChange(() => setTick((t) => t + 1));
-    return () => unsub();
+    const unsub = engine.subscribeStateChange(() => {
+      setTick((t) => t + 1);
+
+      // Manage Wake Lock based on engine state
+      if (engine.isRunning && !wakeLockRef.current && 'wakeLock' in navigator) {
+        navigator.wakeLock.request('screen')
+          .then((wl) => { wakeLockRef.current = wl; })
+          .catch((err) => console.warn('Wake Lock failed:', err));
+      } else if (!engine.isRunning && wakeLockRef.current) {
+        wakeLockRef.current.release()
+          .then(() => { wakeLockRef.current = null; })
+          .catch((err: any) => console.warn('Wake Lock release failed:', err));
+      }
+    });
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    return () => {
+      unsub();
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+      }
+    };
   }, [engine]);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.warn(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
 
   const handleTapTempo = () => {
     const now = performance.now();
@@ -214,13 +255,22 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Export Action */}
+          {/* Fullscreen Toggle */}
+          <button
+            onClick={toggleFullscreen}
+            className="p-2 rounded-lg bg-[#121214] border border-[#28282A] text-[#9E9E9E] hover:text-[#F0F0F0] hover:bg-[#18181B] transition-colors"
+            title="Toggle Fullscreen"
+          >
+            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          </button>
+
           <button
             id="export-modal-btn"
             onClick={onOpenExport}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#7C5DFF] hover:bg-[#6C4DE6] text-[#FFFFFF] font-bold text-xs shadow-[0_0_15px_rgba(124,93,255,0.35)] transition-all cursor-pointer"
           >
             <Download className="w-4 h-4" />
-            <span>EXPORT</span>
+            <span className="hidden sm:inline">EXPORT</span>
           </button>
 
           {/* Shortcuts Guide (Optional) */}

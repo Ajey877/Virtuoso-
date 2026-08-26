@@ -7,6 +7,15 @@
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     overscroll-behavior: none;
     touch-action: pan-x pan-y;
+    -webkit-touch-callout: none; /* Disable native Android/iOS callouts */
+    -webkit-user-select: none; /* Chrome/Safari/Opera */
+    user-select: none; /* Disable text selection globally to make it feel like an app */
+  }
+
+  /* Re-enable selection on input fields if we need them later */
+  input, textarea {
+    -webkit-user-select: auto;
+    user-select: auto;
   }
 }
 
