@@ -54,6 +54,13 @@ export const RotaryKnob: React.FC<RotaryKnobProps> = ({
     dragStartVal.current = value;
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // e.preventDefault(); // Don't prevent default here to allow page scroll when needed? Actually we might want it.
+    setIsDragging(true);
+    dragStartY.current = e.touches[0].clientY;
+    dragStartVal.current = value;
+  };
+
   const handleDoubleClick = () => {
     if (defaultValue !== undefined) {
       onChange(defaultValue);
@@ -63,9 +70,19 @@ export const RotaryKnob: React.FC<RotaryKnobProps> = ({
   };
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (e: MouseEvent | TouchEvent) => {
       if (!isDragging) return;
-      const deltaY = dragStartY.current - e.clientY;
+
+      let clientY;
+      let shiftKey = false;
+      if (window.TouchEvent && e instanceof TouchEvent) {
+        clientY = e.touches[0].clientY;
+      } else {
+        clientY = (e as MouseEvent).clientY;
+        shiftKey = (e as MouseEvent).shiftKey;
+      }
+
+      const deltaY = dragStartY.current - clientY;
       const sensitivity = e.shiftKey ? 400 : 150; // Shift for precision fine-tuning
       const deltaVal = ((max - min) * deltaY) / sensitivity;
       let newVal = dragStartVal.current + deltaVal;
@@ -84,10 +101,16 @@ export const RotaryKnob: React.FC<RotaryKnobProps> = ({
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleMouseMove, { passive: false });
+      window.addEventListener('touchend', handleMouseUp);
+      window.addEventListener('touchcancel', handleMouseUp);
     }
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+      window.removeEventListener('touchcancel', handleMouseUp);
     };
   }, [isDragging, max, min, step, onChange]);
 
@@ -103,8 +126,9 @@ export const RotaryKnob: React.FC<RotaryKnobProps> = ({
   return (
     <div
       id={id}
-      className="flex flex-col items-center select-none group cursor-ns-resize"
+      className="flex flex-col items-center select-none group cursor-ns-resize touch-none"
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
       onDoubleClick={handleDoubleClick}
       onContextMenu={(e) => {
         if (onMidiLearn) {

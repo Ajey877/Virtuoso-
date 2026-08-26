@@ -42,6 +42,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>('instruments');
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [audioInitialized, setAudioInitialized] = useState(false);
   const [, setTick] = useState(0);
 
   // Initialize keyboard hooks & AudioEngine subscriptions
@@ -56,16 +57,63 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
 
+    // Screen Wake Lock API for Android
+    let wakeLock: WakeLockSentinel | null = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.warn('Wake Lock request failed:', err);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    requestWakeLock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const unsub = engine.subscribeStateChange(() => setTick((t) => t + 1));
     return () => {
       unsub();
       window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
       keyboardMapper.destroy();
     };
   }, [engine, keyboardMapper, midiManager]);
 
+  const handleInitializeAudio = async () => {
+    await engine.init();
+    setAudioInitialized(true);
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-[#E0E0E0] flex flex-col justify-between selection:bg-[#7C5DFF] selection:text-[#0A0A0B] font-sans antialiased">
+      {!audioInitialized && (
+        <div className="fixed inset-0 z-50 bg-[#0A0A0B]/90 backdrop-blur-sm flex items-center justify-center">
+          <button
+            onClick={handleInitializeAudio}
+            className="flex flex-col items-center gap-4 bg-[#18181B] p-8 rounded-2xl border border-[#7C5DFF]/30 shadow-[0_0_40px_rgba(124,93,255,0.2)] hover:bg-[#232326] transition-all transform hover:scale-105"
+          >
+            <div className="w-16 h-16 bg-[#7C5DFF] rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(124,93,255,0.5)]">
+              <Music className="w-8 h-8 text-white" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-white mb-2">Tap to Start Engine</h2>
+              <p className="text-[#9E9E9E] text-sm">Initialize Web Audio API for lowest latency</p>
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Top Application Bar */}
       <Header
         activeTab={activeTab}
@@ -108,7 +156,7 @@ export const App: React.FC = () => {
         <VirtualKeyboard />
 
         {/* Keyboard Quick Hotkey Guide */}
-        <div className="bg-[#121214] p-2.5 rounded-xl border border-[#28282A] flex flex-wrap items-center justify-between text-[11px] font-mono text-[#9E9E9E] gap-2 shadow-sm">
+        <div className="hidden sm:flex bg-[#121214] p-2.5 rounded-xl border border-[#28282A] flex-wrap items-center justify-between text-[11px] font-mono text-[#9E9E9E] gap-2 shadow-sm">
           <div className="flex items-center gap-2">
             <Keyboard className="w-3.5 h-3.5 text-[#9B82FF]" />
             <span className="text-[#F0F0F0] font-bold">KEYBOARD MAPPING:</span>
