@@ -38,4 +38,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Permission to allow screen to stay awake (Wake Lock) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Permission for microphone input in AudioEngine -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 </manifest>
