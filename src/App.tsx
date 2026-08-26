@@ -32,22 +32,22 @@ import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { VstPluginRack } from './components/VstPluginRack';
 import { PianoRollSequencer } from './components/PianoRollSequencer';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
-import { AppTab } from './types/audio';
+import { useAppStore } from './store/useAppStore';
 
 export const App: React.FC = () => {
   const engine = AudioEngine.getInstance();
   const midiManager = MidiManager.getInstance();
   const keyboardMapper = KeyboardMapper.getInstance();
+  const { activeTab, syncFromEngine } = useAppStore();
 
-  const [activeTab, setActiveTab] = useState<AppTab>('instruments');
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
-  const [, setTick] = useState(0);
 
   // Initialize keyboard hooks & AudioEngine subscriptions
   useEffect(() => {
     keyboardMapper.init();
     midiManager.init();
+    syncFromEngine(); // Initial sync from engine state
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === '?' || (e.shiftKey && e.key === '/')) {
@@ -56,20 +56,21 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    const unsub = engine.subscribeStateChange(() => setTick((t) => t + 1));
+    const unsub = engine.subscribeStateChange(() => syncFromEngine());
+
     return () => {
       unsub();
       window.removeEventListener('keydown', handleKeyDown);
       keyboardMapper.destroy();
     };
-  }, [engine, keyboardMapper, midiManager]);
+  }, [engine, keyboardMapper, midiManager, syncFromEngine]);
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-[#E0E0E0] flex flex-col justify-between selection:bg-[#7C5DFF] selection:text-[#0A0A0B] font-sans antialiased">
       {/* Top Application Bar */}
       <Header
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={(tab) => useAppStore.getState().setActiveTab(tab)}
         onOpenExport={() => setIsExportOpen(true)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
       />
@@ -79,7 +80,7 @@ export const App: React.FC = () => {
         {/* Active Tab View Content */}
         <div className="transition-all duration-150">
           {activeTab === 'instruments' && (
-            <InstrumentSelector onSelectCustomTab={() => setActiveTab('sampler')} />
+            <InstrumentSelector onSelectCustomTab={() => useAppStore.getState().setActiveTab('sampler')} />
           )}
 
           {activeTab === 'pianoroll' && <PianoRollSequencer />}

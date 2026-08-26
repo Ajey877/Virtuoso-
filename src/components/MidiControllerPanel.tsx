@@ -4,11 +4,11 @@ import { MidiManager } from '../audio/MidiManager';
 
 export const MidiControllerPanel: React.FC = () => {
   const midiManager = MidiManager.getInstance();
-  const [, setTick] = useState(0);
+  const [rev, setRev] = useState(0);
 
   useEffect(() => {
     midiManager.init();
-    const unsub = midiManager.subscribe(() => setTick((t) => t + 1));
+    const unsub = midiManager.subscribe(() => setRev((t) => t + 1));
     return () => unsub();
   }, [midiManager]);
 

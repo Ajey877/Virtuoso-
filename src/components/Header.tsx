@@ -21,6 +21,7 @@ import { AudioEngine } from '../audio/AudioEngine';
 import { AppTab } from '../types/audio';
 import { RotaryKnob } from './common/RotaryKnob';
 import { VuMeter } from './common/VuMeter';
+import { useAppStore } from '../store/useAppStore';
 
 interface HeaderProps {
   activeTab: AppTab;
@@ -36,16 +37,14 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenShortcuts,
 }) => {
   const engine = AudioEngine.getInstance();
-  const [, setTick] = useState(0);
+  const { isRunning, metronomeEnabled, masterVolume, bpm, setBpm, setMetronomeEnabled, setMasterVolume, setIsRunning } = useAppStore();
   const [tapTimes, setTapTimes] = useState<number[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const wakeLockRef = useRef<any>(null);
 
   useEffect(() => {
     const unsub = engine.subscribeStateChange(() => {
-      setTick((t) => t + 1);
-
-      // Manage Wake Lock based on engine state
+      // Keep syncing wakelock to engine state
       if (engine.isRunning && !wakeLockRef.current && 'wakeLock' in navigator) {
         navigator.wakeLock.request('screen')
           .then((wl) => { wakeLockRef.current = wl; })
@@ -96,23 +95,24 @@ export const Header: React.FC<HeaderProps> = ({
       const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
       const calculatedBpm = Math.round(60000 / avgInterval);
       const boundedBpm = Math.max(40, Math.min(260, calculatedBpm));
-      engine.bpm = boundedBpm;
-      engine.notifyStateChange();
+      setBpm(boundedBpm);
     }
   };
 
   const handleToggleAudio = async () => {
     if (!engine.isRunning) {
       await engine.init();
+      setIsRunning(true);
     } else if (engine.ctx) {
       if (engine.ctx.state === 'running') {
         await engine.ctx.suspend();
         engine.isRunning = false;
+        setIsRunning(false);
       } else {
         await engine.ctx.resume();
         engine.isRunning = true;
+        setIsRunning(true);
       }
-      engine.notifyStateChange();
     }
   };
 
@@ -156,15 +156,15 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="audio-power-btn"
             onClick={handleToggleAudio}
-            title={engine.isRunning ? 'Audio Engine Running' : 'Click to Enable Audio'}
+            title={isRunning ? 'Audio Engine Running' : 'Click to Enable Audio'}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold border transition-all ${
-              engine.isRunning
+              isRunning
                 ? 'bg-[#7C5DFF]/15 border-[#7C5DFF]/40 text-[#9B82FF] shadow-[0_0_12px_rgba(124,93,255,0.2)]'
                 : 'bg-red-950/40 border-red-500/40 text-red-300 animate-pulse'
             }`}
           >
             <Power className="w-3.5 h-3.5" />
-            <span>{engine.isRunning ? 'DSP ON' : 'DSP OFF'}</span>
+            <span>{isRunning ? 'DSP ON' : 'DSP OFF'}</span>
           </button>
         </div>
 
@@ -198,10 +198,9 @@ export const Header: React.FC<HeaderProps> = ({
                   type="number"
                   min="40"
                   max="260"
-                  value={engine.bpm}
+                  value={bpm}
                   onChange={(e) => {
-                    engine.bpm = Math.max(40, Math.min(260, parseInt(e.target.value) || 120));
-                    engine.notifyStateChange();
+                    setBpm(Math.max(40, Math.min(260, parseInt(e.target.value) || 120)));
                   }}
                   className="w-10 bg-transparent text-right focus:outline-none text-[#9B82FF] font-mono text-xs"
                 />
@@ -219,15 +218,15 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               id="metronome-toggle-btn"
-              onClick={() => engine.toggleMetronome()}
+              onClick={() => setMetronomeEnabled(!metronomeEnabled)}
               className={`px-1.5 py-1 rounded text-xs ml-0.5 transition-all ${
-                engine.metronomeEnabled
+                metronomeEnabled
                   ? 'bg-[#7C5DFF]/20 text-[#9B82FF] border border-[#7C5DFF]/40'
                   : 'text-[#9E9E9E] hover:text-[#E0E0E0]'
               }`}
               title="Toggle Metronome (Click)"
             >
-              {engine.metronomeEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+              {metronomeEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
             </button>
           </div>
 
@@ -236,20 +235,14 @@ export const Header: React.FC<HeaderProps> = ({
             <RotaryKnob
               id="master-vol-knob"
               label="MASTER"
-              value={engine.masterVolume}
+              value={masterVolume}
               min={0}
               max={1.2}
               step={0.01}
               defaultValue={0.85}
               size="sm"
               color="#7C5DFF"
-              onChange={(val) => {
-                engine.masterVolume = val;
-                if (engine.masterGain && engine.ctx) {
-                  engine.masterGain.gain.setValueAtTime(val, engine.ctx.currentTime);
-                }
-                engine.notifyStateChange();
-              }}
+              onChange={setMasterVolume}
             />
             <VuMeter id="master-vu-meter" />
           </div>

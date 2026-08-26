@@ -3,15 +3,16 @@ import { Activity, Flame, Sparkles, Sliders, Wand2, Waves, Zap } from 'lucide-re
 import { AudioEngine } from '../audio/AudioEngine';
 import { MORPH_STYLES, SoundMorpher } from '../audio/synthesis/SoundMorpher';
 import { RotaryKnob } from './common/RotaryKnob';
+import { useAppStore } from '../store/useAppStore';
 
 export const InstrumentEditor: React.FC = () => {
   const engine = AudioEngine.getInstance();
-  const [, setTick] = useState(0);
+  const { syncFromEngine } = useAppStore();
 
   useEffect(() => {
-    const unsub = engine.subscribeStateChange(() => setTick((t) => t + 1));
+    const unsub = engine.subscribeStateChange(() => syncFromEngine());
     return () => unsub();
-  }, [engine]);
+  }, [engine, syncFromEngine]);
 
   const inst = engine.currentInstrument;
 

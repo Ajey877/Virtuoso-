@@ -3,15 +3,16 @@ import { Mic, MicOff, Radio, Sliders, Volume2 } from 'lucide-react';
 import { AudioEngine } from '../audio/AudioEngine';
 import { RotaryKnob } from './common/RotaryKnob';
 import { VuMeter } from './common/VuMeter';
+import { useAppStore } from '../store/useAppStore';
 
 export const AudioRoutingMatrix: React.FC = () => {
   const engine = AudioEngine.getInstance();
-  const [, setTick] = useState(0);
+  const { syncFromEngine } = useAppStore();
 
   useEffect(() => {
-    const unsub = engine.subscribeStateChange(() => setTick((t) => t + 1));
+    const unsub = engine.subscribeStateChange(() => syncFromEngine());
     return () => unsub();
-  }, [engine]);
+  }, [engine, syncFromEngine]);
 
   const handleToggleMic = async () => {
     if (engine.micEnabled) {

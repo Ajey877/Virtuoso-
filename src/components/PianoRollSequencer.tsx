@@ -17,6 +17,7 @@ import {
 import { AudioEngine } from '../audio/AudioEngine';
 import { PianoRollEngine, MELODY_TEMPLATES } from '../audio/synthesis/PianoRollEngine';
 import { PianoRollNote } from '../types/audio';
+import { useAppStore } from '../store/useAppStore';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -34,7 +35,9 @@ function isBlackKey(midi: number): boolean {
 export const PianoRollSequencer: React.FC = () => {
   const engine = AudioEngine.getInstance();
   const pianoRoll = PianoRollEngine.getInstance();
-  const [, setTick] = useState(0);
+
+  // We still need local re-renders for PianoRoll specific state, but without hacky empty setState
+  const [rev, setRev] = useState(0);
 
   // Range of MIDI pitches to show (e.g. C2 (36) to C6 (84) or C3 to B5)
   const [minNote, setMinNote] = useState(48); // C3
@@ -45,7 +48,8 @@ export const PianoRollSequencer: React.FC = () => {
   const gridContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const unsub = pianoRoll.subscribe(() => setTick((t) => t + 1));
+    // PianoRoll uses a separate pubsub which we can just use to trigger local component update
+    const unsub = pianoRoll.subscribe(() => setRev(r => r + 1));
     return () => unsub();
   }, [pianoRoll]);
 
@@ -85,7 +89,7 @@ export const PianoRollSequencer: React.FC = () => {
     const curIdx = durations.indexOf(note.duration);
     note.duration = durations[(curIdx + 1) % durations.length];
     pianoRoll.notes = [...pianoRoll.notes];
-    setTick((t) => t + 1);
+    setRev(r => r + 1);
   };
 
   return (
@@ -177,7 +181,7 @@ export const PianoRollSequencer: React.FC = () => {
                 key={steps}
                 onClick={() => {
                   pianoRoll.totalSteps = steps;
-                  setTick((t) => t + 1);
+                  setRev((r) => r + 1);
                 }}
                 className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-all ${
                   pianoRoll.totalSteps === steps

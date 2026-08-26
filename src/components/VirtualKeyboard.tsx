@@ -16,6 +16,7 @@ import { AudioEngine } from '../audio/AudioEngine';
 import { COMPUTER_KEY_MAP, KeyboardMapper } from '../audio/KeyboardMapper';
 import { NOTE_NAMES, SCALES } from '../audio/synthesis/scales';
 import { RotaryKnob } from './common/RotaryKnob';
+import { useAppStore } from '../store/useAppStore';
 
 interface KeyInfo {
   midiNote: number;
@@ -29,16 +30,19 @@ export const VirtualKeyboard: React.FC = () => {
   const engine = AudioEngine.getInstance();
   const mapper = KeyboardMapper.getInstance();
 
+  const { octaveShift, semitoneTranspose, scaleLockEnabled, sustainPedal, macroCutoff, macroDrive, macroSpace, macroMotion, setOctaveShift, setSemitoneTranspose, setScaleLockEnabled, setSustainPedal, setMacro } = useAppStore();
+
   const [activeNotes, setActiveNotes] = useState<Set<number>>(new Set());
   const [pitchBendVal, setPitchBendVal] = useState(0);
   const [modWheelVal, setModWheelVal] = useState(0);
+  // Remove force rerender since we use zustand now for UI state
+  // But we still need it for mapper fixed velocity since it isn't in zustand yet
   const [, setTick] = useState(0);
 
   const isPitchDragging = useRef(false);
   const isModDragging = useRef(false);
 
   useEffect(() => {
-    const unsubEngine = engine.subscribeStateChange(() => setTick((t) => t + 1));
     const unsubNote = engine.subscribeNoteEvent((note, _vel, isNoteOn) => {
       setActiveNotes((prev) => {
         const next = new Set(prev);
@@ -48,10 +52,7 @@ export const VirtualKeyboard: React.FC = () => {
       });
     });
 
-    return () => {
-      unsubEngine();
-      unsubNote();
-    };
+    return () => unsubNote();
   }, [engine]);
 
   // Compute key layout (from C2 = 36 to B5 = 83, 4 octaves = 48 keys)
@@ -59,7 +60,7 @@ export const VirtualKeyboard: React.FC = () => {
   const totalKeys = 36; // 3 full octaves
   const keys: KeyInfo[] = [];
 
-  const baseNoteWithOctave = 60 + engine.octaveShift * 12 + engine.semitoneTranspose;
+  const baseNoteWithOctave = 60 + octaveShift * 12 + semitoneTranspose;
 
   // Build reverse lookup for computer keys
   const compKeyLookup: Record<number, string> = {};
@@ -240,24 +241,18 @@ export const VirtualKeyboard: React.FC = () => {
             <span className="text-[11px] text-[#9E9E9E] font-mono">OCTAVE</span>
             <button
               id="octave-down-btn"
-              onClick={() => {
-                engine.octaveShift = Math.max(-3, engine.octaveShift - 1);
-                engine.notifyStateChange();
-              }}
+              onClick={() => setOctaveShift(Math.max(-3, octaveShift - 1))}
               className="p-1 hover:bg-[#28282A] text-[#E0E0E0] rounded transition-colors"
               title="Octave Down [Hotkey: [ ]"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
             <span className="font-mono text-xs font-bold text-[#9B82FF] w-6 text-center">
-              {engine.octaveShift >= 0 ? `+${engine.octaveShift}` : engine.octaveShift}
+              {octaveShift >= 0 ? `+${octaveShift}` : octaveShift}
             </span>
             <button
               id="octave-up-btn"
-              onClick={() => {
-                engine.octaveShift = Math.min(3, engine.octaveShift + 1);
-                engine.notifyStateChange();
-              }}
+              onClick={() => setOctaveShift(Math.min(3, octaveShift + 1))}
               className="p-1 hover:bg-[#28282A] text-[#E0E0E0] rounded transition-colors"
               title="Octave Up [Hotkey: ] ]"
             >
@@ -270,24 +265,18 @@ export const VirtualKeyboard: React.FC = () => {
             <span className="text-[11px] text-[#9E9E9E] font-mono">TRANSPOSE</span>
             <button
               id="transpose-down-btn"
-              onClick={() => {
-                engine.semitoneTranspose = Math.max(-12, engine.semitoneTranspose - 1);
-                engine.notifyStateChange();
-              }}
+              onClick={() => setSemitoneTranspose(Math.max(-12, semitoneTranspose - 1))}
               className="p-1 hover:bg-[#28282A] text-[#E0E0E0] rounded transition-colors"
               title="Semitone Down [Hotkey: Alt + -]"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
             <span className="font-mono text-xs font-bold text-[#E0E0E0] w-6 text-center">
-              {engine.semitoneTranspose >= 0 ? `+${engine.semitoneTranspose}` : engine.semitoneTranspose}
+              {semitoneTranspose >= 0 ? `+${semitoneTranspose}` : semitoneTranspose}
             </span>
             <button
               id="transpose-up-btn"
-              onClick={() => {
-                engine.semitoneTranspose = Math.min(12, engine.semitoneTranspose + 1);
-                engine.notifyStateChange();
-              }}
+              onClick={() => setSemitoneTranspose(Math.min(12, semitoneTranspose + 1))}
               className="p-1 hover:bg-[#28282A] text-[#E0E0E0] rounded transition-colors"
               title="Semitone Up [Hotkey: Alt + =]"
             >
@@ -298,18 +287,15 @@ export const VirtualKeyboard: React.FC = () => {
           {/* Scale Lock Status */}
           <button
             id="scale-lock-toggle"
-            onClick={() => {
-              engine.scaleLockEnabled = !engine.scaleLockEnabled;
-              engine.notifyStateChange();
-            }}
+            onClick={() => setScaleLockEnabled(!scaleLockEnabled)}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
-              engine.scaleLockEnabled
+              scaleLockEnabled
                 ? 'bg-[#7C5DFF]/20 border-[#7C5DFF]/50 text-[#9B82FF] shadow-[0_0_12px_rgba(124,93,255,0.2)]'
                 : 'bg-[#18181B] border-[#28282A] text-[#9E9E9E] hover:text-[#F0F0F0] hover:border-[#3A3A3C]'
             }`}
           >
-            {engine.scaleLockEnabled ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-            <span>{engine.scaleLockEnabled ? `Locked: ${scale?.name || 'Scale'}` : 'Scale Free'}</span>
+            {scaleLockEnabled ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+            <span>{scaleLockEnabled ? `Locked: ${scale?.name || 'Scale'}` : 'Scale Free'}</span>
           </button>
         </div>
 
@@ -317,11 +303,11 @@ export const VirtualKeyboard: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             id="sustain-pedal-btn"
-            onMouseDown={() => engine.setSustainPedal(true)}
-            onMouseUp={() => engine.setSustainPedal(false)}
-            onClick={() => engine.setSustainPedal(!engine.sustainPedal)}
+            onMouseDown={() => setSustainPedal(true)}
+            onMouseUp={() => setSustainPedal(false)}
+            onClick={() => setSustainPedal(!sustainPedal)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-              engine.sustainPedal
+              sustainPedal
                 ? 'bg-[#7C5DFF] text-white border-[#9B82FF] shadow-[0_0_15px_rgba(124,93,255,0.4)]'
                 : 'bg-[#18181B] border-[#28282A] text-[#E0E0E0] hover:bg-[#232326]'
             }`}
@@ -371,7 +357,7 @@ export const VirtualKeyboard: React.FC = () => {
           {/* Macro 1: Cutoff / Tone */}
           <div className="flex items-center gap-2">
             <RotaryKnob
-              value={engine.macroCutoff}
+              value={macroCutoff}
               min={0.1}
               max={1.9}
               step={0.05}
@@ -379,14 +365,14 @@ export const VirtualKeyboard: React.FC = () => {
               unit=""
               color="#7C5DFF"
               size={36}
-              onChange={(v) => engine.setProducerMacro('cutoff', v)}
+              onChange={(v) => setMacro('cutoff', v)}
             />
           </div>
 
           {/* Macro 2: Drive / Heat */}
           <div className="flex items-center gap-2">
             <RotaryKnob
-              value={engine.macroDrive}
+              value={macroDrive}
               min={0}
               max={1}
               step={0.02}
@@ -394,14 +380,14 @@ export const VirtualKeyboard: React.FC = () => {
               unit=""
               color="#f59e0b"
               size={36}
-              onChange={(v) => engine.setProducerMacro('drive', v)}
+              onChange={(v) => setMacro('drive', v)}
             />
           </div>
 
           {/* Macro 3: Space / Reverb */}
           <div className="flex items-center gap-2">
             <RotaryKnob
-              value={engine.macroSpace}
+              value={macroSpace}
               min={0}
               max={1}
               step={0.02}
@@ -409,14 +395,14 @@ export const VirtualKeyboard: React.FC = () => {
               unit=""
               color="#06b6d4"
               size={36}
-              onChange={(v) => engine.setProducerMacro('space', v)}
+              onChange={(v) => setMacro('space', v)}
             />
           </div>
 
           {/* Macro 4: Motion / Vibrato */}
           <div className="flex items-center gap-2">
             <RotaryKnob
-              value={engine.macroMotion}
+              value={macroMotion}
               min={0}
               max={1}
               step={0.02}
@@ -424,7 +410,7 @@ export const VirtualKeyboard: React.FC = () => {
               unit=""
               color="#10b981"
               size={36}
-              onChange={(v) => engine.setProducerMacro('motion', v)}
+              onChange={(v) => setMacro('motion', v)}
             />
           </div>
         </div>

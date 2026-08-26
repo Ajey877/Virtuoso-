@@ -87,8 +87,10 @@ export class AudioEngine {
     swing: 0,
   };
   private heldNotesForArp: number[] = [];
-  private arpTimerId: number | null = null;
+  private arpNextNoteTime: number = 0;
   private arpStepIndex: number = 0;
+  private lookaheadInterval: number = 25.0; // ms
+  private scheduleAheadTime: number = 0.1; // s
 
   // VST Plugins
   public vstPlugins: VstPlugin[] = [
@@ -207,8 +209,9 @@ export class AudioEngine {
 
   // Metronome
   public metronomeEnabled: boolean = false;
-  private metronomeTimerId: number | null = null;
+  private metronomeNextNoteTime: number = 0;
   private metronomeBeat: number = 0;
+  private masterSchedulerTimerId: number | null = null;
 
   // Event Listeners for UI updates
   private noteEventListeners: Set<(note: number, velocity: number, isNoteOn: boolean) => void> = new Set();
@@ -265,6 +268,7 @@ export class AudioEngine {
     this.setupFxRack();
 
     this.isRunning = true;
+    this.startMasterScheduler();
     this.notifyStateChange();
   }
 
@@ -707,10 +711,6 @@ export class AudioEngine {
     // Arp Tracking
     if (this.arpeggiator.enabled) {
       this.heldNotesForArp = this.heldNotesForArp.filter((n) => n !== note);
-      if (this.heldNotesForArp.length === 0 && this.arpTimerId) {
-        clearInterval(this.arpTimerId);
-        this.arpTimerId = null;
-      }
     }
 
     // Notify UI
@@ -1104,70 +1104,106 @@ export class AudioEngine {
     };
   }
 
+  // --- MASTER LOOKAHEAD SCHEDULER ---
+  private startMasterScheduler(): void {
+    if (this.masterSchedulerTimerId) clearInterval(this.masterSchedulerTimerId);
+
+    // Start by initializing timers to right now if they were 0
+    if (this.ctx) {
+      if (this.metronomeNextNoteTime === 0) this.metronomeNextNoteTime = this.ctx.currentTime + 0.1;
+      if (this.arpNextNoteTime === 0) this.arpNextNoteTime = this.ctx.currentTime + 0.1;
+    }
+
+    this.masterSchedulerTimerId = window.setInterval(() => {
+      if (!this.ctx || !this.isRunning) return;
+
+      const currentTime = this.ctx.currentTime;
+
+      // 1. Schedule Metronome
+      while (this.metronomeEnabled && this.metronomeNextNoteTime < currentTime + this.scheduleAheadTime) {
+        this.scheduleMetronomeBeat(this.metronomeNextNoteTime);
+        this.advanceMetronomeNote();
+      }
+
+      // 2. Schedule Arpeggiator
+      while (this.arpeggiator.enabled && this.heldNotesForArp.length > 0 && this.arpNextNoteTime < currentTime + this.scheduleAheadTime) {
+        this.scheduleArpNote(this.arpNextNoteTime);
+        this.advanceArpNote();
+      }
+    }, this.lookaheadInterval);
+  }
+
   // --- ARPEGGIATOR ENGINE ---
   private ensureArpRunning(): void {
-    if (!this.arpeggiator.enabled || this.arpTimerId || this.heldNotesForArp.length === 0) return;
+    if (!this.arpeggiator.enabled || this.heldNotesForArp.length === 0) return;
+    if (this.ctx && this.arpNextNoteTime < this.ctx.currentTime) {
+      this.arpNextNoteTime = this.ctx.currentTime + 0.05;
+    }
+  }
 
-    const getIntervalMs = (rate: string, bpm: number): number => {
-      const beatMs = (60 / bpm) * 1000;
+  private advanceArpNote(): void {
+    const getIntervalSeconds = (rate: string, bpm: number): number => {
+      const beatSecs = 60.0 / bpm;
       switch (rate) {
-        case '1/4': return beatMs;
-        case '1/8': return beatMs / 2;
-        case '1/16': return beatMs / 4;
-        case '1/32': return beatMs / 8;
-        case '1/8t': return (beatMs / 2) * (2 / 3);
-        case '1/16t': return (beatMs / 4) * (2 / 3);
-        default: return beatMs / 4;
+        case '1/4': return beatSecs;
+        case '1/8': return beatSecs / 2;
+        case '1/16': return beatSecs / 4;
+        case '1/32': return beatSecs / 8;
+        case '1/8t': return (beatSecs / 2) * (2 / 3);
+        case '1/16t': return (beatSecs / 4) * (2 / 3);
+        default: return beatSecs / 4;
       }
     };
+    const intervalSecs = getIntervalSeconds(this.arpeggiator.rate, this.bpm);
+    this.arpNextNoteTime += intervalSecs;
+    this.arpStepIndex++;
+  }
 
-    const intervalMs = getIntervalMs(this.arpeggiator.rate, this.bpm);
+  private scheduleArpNote(time: number): void {
+    if (this.heldNotesForArp.length === 0 || !this.ctx) return;
 
-    this.arpTimerId = window.setInterval(() => {
-      if (this.heldNotesForArp.length === 0) return;
+    const baseNotes = [...this.heldNotesForArp];
+    let fullSequence: number[] = [];
 
-      const baseNotes = [...this.heldNotesForArp];
-      let fullSequence: number[] = [];
+    for (let oct = 0; oct < this.arpeggiator.octaves; oct++) {
+      fullSequence.push(...baseNotes.map((n) => n + oct * 12));
+    }
 
-      for (let oct = 0; oct < this.arpeggiator.octaves; oct++) {
-        fullSequence.push(...baseNotes.map((n) => n + oct * 12));
-      }
+    if (this.arpeggiator.mode === 'down') {
+      fullSequence.reverse();
+    } else if (this.arpeggiator.mode === 'upDown') {
+      const reversed = [...fullSequence].reverse().slice(1, -1);
+      fullSequence = [...fullSequence, ...reversed];
+    } else if (this.arpeggiator.mode === 'random') {
+      fullSequence.sort(() => Math.random() - 0.5);
+    }
 
-      if (this.arpeggiator.mode === 'down') {
-        fullSequence.reverse();
-      } else if (this.arpeggiator.mode === 'upDown') {
-        const reversed = [...fullSequence].reverse().slice(1, -1);
-        fullSequence = [...fullSequence, ...reversed];
-      } else if (this.arpeggiator.mode === 'random') {
-        fullSequence.sort(() => Math.random() - 0.5);
-      }
+    const noteToTrigger = fullSequence[this.arpStepIndex % fullSequence.length];
 
-      const noteToTrigger = fullSequence[this.arpStepIndex % fullSequence.length];
-      this.arpStepIndex++;
+    const getIntervalSeconds = (rate: string, bpm: number): number => {
+      const beatSecs = 60.0 / bpm;
+      if (rate === '1/16') return beatSecs / 4;
+      return beatSecs / 4; // Simplified for arp duration
+    };
 
-      // Trigger short arp note
-      if (this.ctx) {
-        const freq = this.midiNoteToFrequency(noteToTrigger);
-        const now = this.ctx.currentTime;
-        const voice = this.synthesizeVoice(noteToTrigger, freq, 0.8, this.currentInstrument, now);
-        const gateDuration = (intervalMs / 1000) * this.arpeggiator.gate;
+    const intervalSecs = getIntervalSeconds(this.arpeggiator.rate, this.bpm);
+    const gateDuration = intervalSecs * this.arpeggiator.gate;
+    const freq = this.midiNoteToFrequency(noteToTrigger);
 
-        setTimeout(() => {
-          if (this.ctx) {
-            voice.nodes.mainGain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.05);
-            setTimeout(() => {
-              voice.nodes.oscillators.forEach((o) => {
-                try { o.stop(); o.disconnect(); } catch { /* ignore */ }
-              });
-              voice.nodes.mainGain.disconnect();
-            }, 100);
-          }
-        }, gateDuration * 1000);
+    const voice = this.synthesizeVoice(noteToTrigger, freq, 0.8, this.currentInstrument, time);
 
-        this.notifyNoteEvent(noteToTrigger, 0.8, true);
-        setTimeout(() => this.notifyNoteEvent(noteToTrigger, 0, false), gateDuration * 1000);
-      }
-    }, intervalMs);
+    voice.nodes.mainGain.gain.setValueAtTime(voice.nodes.mainGain.gain.value || 0.8, time + gateDuration);
+    voice.nodes.mainGain.gain.exponentialRampToValueAtTime(0.0001, time + gateDuration + 0.05);
+
+    setTimeout(() => {
+      this.cleanupVoiceNodes(voice);
+    }, (time + gateDuration + 0.1 - this.ctx!.currentTime) * 1000);
+
+    const timeUntilEvent = (time - this.ctx.currentTime) * 1000;
+    setTimeout(() => {
+      this.notifyNoteEvent(noteToTrigger, 0.8, true);
+      setTimeout(() => this.notifyNoteEvent(noteToTrigger, 0, false), gateDuration * 1000);
+    }, Math.max(0, timeUntilEvent));
   }
 
   // --- RECORDING & MULTI-TRACK ---
@@ -1282,37 +1318,33 @@ export class AudioEngine {
   // --- METRONOME ---
   public toggleMetronome(): void {
     this.metronomeEnabled = !this.metronomeEnabled;
-    if (this.metronomeEnabled) {
-      this.startMetronome();
-    } else if (this.metronomeTimerId) {
-      clearInterval(this.metronomeTimerId);
-      this.metronomeTimerId = null;
+    if (this.metronomeEnabled && this.ctx) {
+      this.metronomeNextNoteTime = this.ctx.currentTime + 0.05;
+      this.metronomeBeat = 0;
     }
     this.notifyStateChange();
   }
 
-  private startMetronome(): void {
-    if (this.metronomeTimerId) clearInterval(this.metronomeTimerId);
-    const intervalMs = (60 / this.bpm) * 1000;
+  private advanceMetronomeNote(): void {
+    const secondsPerBeat = 60.0 / this.bpm;
+    this.metronomeNextNoteTime += secondsPerBeat;
+    this.metronomeBeat++;
+  }
 
-    this.metronomeTimerId = window.setInterval(() => {
-      if (!this.metronomeEnabled || !this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const now = this.ctx.currentTime;
+  private scheduleMetronomeBeat(time: number): void {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
 
-      const isDownbeat = this.metronomeBeat % 4 === 0;
-      osc.frequency.setValueAtTime(isDownbeat ? 1600 : 800, now);
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+    const isDownbeat = this.metronomeBeat % 4 === 0;
+    osc.frequency.setValueAtTime(isDownbeat ? 1600 : 800, time);
+    gain.gain.setValueAtTime(0.15, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
 
-      osc.connect(gain);
-      gain.connect(this.masterGain || this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.05);
-
-      this.metronomeBeat++;
-    }, intervalMs);
+    osc.connect(gain);
+    gain.connect(this.masterGain || this.ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.05);
   }
 
   // --- OFFLINE RENDERER & HIGH QUALITY EXPORT ---

@@ -20,10 +20,11 @@ import { FACTORY_INSTRUMENTS } from '../audio/synthesis/instruments';
 import { audioBufferToWav } from '../audio/dsp/wavEncoder';
 import { RecordedTrack } from '../types/audio';
 import { RotaryKnob } from './common/RotaryKnob';
+import { useAppStore } from '../store/useAppStore';
 
 export const MultiTrackRecorder: React.FC = () => {
   const engine = AudioEngine.getInstance();
-  const [, setTick] = useState(0);
+  const { syncFromEngine } = useAppStore();
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordElapsed, setRecordElapsed] = useState(0);
   const [isBouncingStems, setIsBouncingStems] = useState(false);
@@ -31,9 +32,9 @@ export const MultiTrackRecorder: React.FC = () => {
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   useEffect(() => {
-    const unsub = engine.subscribeStateChange(() => setTick((t) => t + 1));
+    const unsub = engine.subscribeStateChange(() => syncFromEngine());
     return () => unsub();
-  }, [engine]);
+  }, [engine, syncFromEngine]);
 
   // Record elapsed timer
   useEffect(() => {

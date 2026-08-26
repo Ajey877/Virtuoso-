@@ -21,16 +21,18 @@ import {
 import { CHORDS, NOTE_NAMES, SCALES, TUNINGS } from '../audio/synthesis/scales';
 import { ChordDefinition } from '../types/audio';
 import { RotaryKnob } from './common/RotaryKnob';
+import { useAppStore } from '../store/useAppStore';
 
 export const ScaleChordPanel: React.FC = () => {
   const engine = AudioEngine.getInstance();
   const progEngine = ProgressionEngine.getInstance();
-  const [, setTick] = useState(0);
+  const { syncFromEngine } = useAppStore();
+  const [rev, setRev] = useState(0);
 
   useEffect(() => {
-    const unsub = engine.subscribeStateChange(() => setTick((t) => t + 1));
+    const unsub = engine.subscribeStateChange(() => syncFromEngine());
     return () => unsub();
-  }, [engine]);
+  }, [engine, syncFromEngine]);
 
   const activeProg = progEngine.getActiveProgression();
 
@@ -138,7 +140,7 @@ export const ScaleChordPanel: React.FC = () => {
                 value={progEngine.strumSpeedMs}
                 onChange={(e) => {
                   progEngine.strumSpeedMs = parseInt(e.target.value);
-                  setTick((t) => t + 1);
+                  setRev((t) => t + 1);
                 }}
                 className="bg-transparent text-[#F0F0F0] text-[10px] font-bold focus:outline-none"
               >
@@ -154,7 +156,7 @@ export const ScaleChordPanel: React.FC = () => {
             <button
               onClick={() => {
                 progEngine.humanizeVelocity = !progEngine.humanizeVelocity;
-                setTick((t) => t + 1);
+                setRev((t) => t + 1);
               }}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
                 progEngine.humanizeVelocity
@@ -196,7 +198,7 @@ export const ScaleChordPanel: React.FC = () => {
                 if (progEngine.isPlaying) {
                   progEngine.startPlayback();
                 } else {
-                  setTick((t) => t + 1);
+                  setRev((t) => t + 1);
                 }
               }}
               className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all border ${

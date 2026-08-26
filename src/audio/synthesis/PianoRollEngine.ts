@@ -237,18 +237,29 @@ export class PianoRollEngine {
 
     triggerCurrentStep();
 
-    this.intervalTimerId = window.setInterval(() => {
-      this.currentStep = (this.currentStep + 1) % this.totalSteps;
-      triggerCurrentStep();
-      this.notify();
-    }, stepDurationMs);
+    let nextStepTime = performance.now() + stepDurationMs;
+
+    const scheduler = () => {
+      if (!this.isPlaying) return;
+      const now = performance.now();
+
+      if (now >= nextStepTime) {
+        this.currentStep = (this.currentStep + 1) % this.totalSteps;
+        triggerCurrentStep();
+        this.notify();
+        nextStepTime += stepDurationMs;
+      }
+      this.intervalTimerId = requestAnimationFrame(scheduler) as unknown as number;
+    };
+
+    this.intervalTimerId = requestAnimationFrame(scheduler) as unknown as number;
 
     this.notify();
   }
 
   public stopPlayback(): void {
     if (this.intervalTimerId) {
-      clearInterval(this.intervalTimerId);
+      cancelAnimationFrame(this.intervalTimerId as unknown as number);
       this.intervalTimerId = null;
     }
     this.isPlaying = false;

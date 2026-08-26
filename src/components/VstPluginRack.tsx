@@ -3,16 +3,17 @@ import { Power, Sliders, Volume2, Waves } from 'lucide-react';
 import { AudioEngine } from '../audio/AudioEngine';
 import { MidiManager } from '../audio/MidiManager';
 import { RotaryKnob } from './common/RotaryKnob';
+import { useAppStore } from '../store/useAppStore';
 
 export const VstPluginRack: React.FC = () => {
   const engine = AudioEngine.getInstance();
   const midiManager = MidiManager.getInstance();
-  const [, setTick] = useState(0);
+  const { syncFromEngine } = useAppStore();
 
   useEffect(() => {
-    const unsub = engine.subscribeStateChange(() => setTick((t) => t + 1));
+    const unsub = engine.subscribeStateChange(() => syncFromEngine());
     return () => unsub();
-  }, [engine]);
+  }, [engine, syncFromEngine]);
 
   const handleMidiLearn = (pluginId: string, paramKey: string, controlName: string, min: number, max: number) => {
     midiManager.startLearning({

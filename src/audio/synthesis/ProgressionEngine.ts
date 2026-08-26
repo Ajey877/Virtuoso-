@@ -202,20 +202,31 @@ export class ProgressionEngine {
     const stepDurationMs = (60 / progression.bpm) * 2 * 1000; // 2 beats per chord
 
     this.triggerStep(0, stepDurationMs);
+    let nextStepTime = performance.now() + stepDurationMs;
 
-    this.playbackTimerId = window.setInterval(() => {
-      this.currentStepIndex = (this.currentStepIndex + 1) % progression.steps.length;
-      this.triggerStep(this.currentStepIndex, stepDurationMs);
+    const scheduler = () => {
+      if (!this.isPlaying) return;
+      const now = performance.now();
 
-      if (!this.loopProgression && this.currentStepIndex === progression.steps.length - 1) {
-        this.stopPlayback();
+      if (now >= nextStepTime) {
+        this.currentStepIndex = (this.currentStepIndex + 1) % progression.steps.length;
+        this.triggerStep(this.currentStepIndex, stepDurationMs);
+        nextStepTime += stepDurationMs;
+
+        if (!this.loopProgression && this.currentStepIndex === 0) {
+          this.stopPlayback();
+          return;
+        }
       }
-    }, stepDurationMs);
+      this.playbackTimerId = requestAnimationFrame(scheduler) as unknown as number;
+    };
+
+    this.playbackTimerId = requestAnimationFrame(scheduler) as unknown as number;
   }
 
   public stopPlayback(): void {
     if (this.playbackTimerId) {
-      clearInterval(this.playbackTimerId);
+      cancelAnimationFrame(this.playbackTimerId as unknown as number);
       this.playbackTimerId = null;
     }
     this.isPlaying = false;

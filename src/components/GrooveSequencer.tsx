@@ -29,6 +29,7 @@ import {
 import { DrumEngine, DrumSoundId } from '../audio/synthesis/DrumEngine';
 import { NOTE_NAMES } from '../audio/synthesis/scales';
 import { RotaryKnob } from './common/RotaryKnob';
+import { useAppStore } from '../store/useAppStore';
 
 export const GrooveSequencer: React.FC = () => {
   const engine = AudioEngine.getInstance();
@@ -37,7 +38,8 @@ export const GrooveSequencer: React.FC = () => {
 
   const [isPlaying, setIsPlaying] = useState(sequencer.isPlaying);
   const [activeStep, setActiveStep] = useState(sequencer.currentStep);
-  const [, setTick] = useState(0);
+  const { syncFromEngine } = useAppStore();
+  const [rev, setRev] = useState(0); // local UI refresh for sequencer
   const [selectedPresetId, setSelectedPresetId] = useState<string>(SEQUENCER_PRESETS[0].id);
   const [activeEditStep, setActiveEditStep] = useState<number | null>(null);
 
@@ -48,11 +50,11 @@ export const GrooveSequencer: React.FC = () => {
 
     const unsubState = sequencer.subscribeState(() => {
       setIsPlaying(sequencer.isPlaying);
-      setTick((t) => t + 1);
+      setRev((t) => t + 1);
     });
 
     const unsubEngine = engine.subscribeStateChange(() => {
-      setTick((t) => t + 1);
+      syncFromEngine();
     });
 
     return () => {
@@ -72,7 +74,7 @@ export const GrooveSequencer: React.FC = () => {
     if (track.steps[stepIdx].active && engine.ctx && engine.masterGain) {
       drumEngine.triggerDrum(engine.ctx, engine.masterGain, track.soundId, 0.85);
     }
-    setTick((t) => t + 1);
+    setRev((t) => t + 1);
   };
 
   const handleMelodicStepClick = (stepIdx: number) => {
@@ -84,7 +86,7 @@ export const GrooveSequencer: React.FC = () => {
       engine.playNote(pitch, step.velocity);
       setTimeout(() => engine.stopNote(pitch), 250);
     }
-    setTick((t) => t + 1);
+    setRev((t) => t + 1);
   };
 
   const handleAuditionDrum = (soundId: DrumSoundId) => {
@@ -186,7 +188,7 @@ export const GrooveSequencer: React.FC = () => {
               value={sequencer.swing}
               onChange={(e) => {
                 sequencer.swing = parseFloat(e.target.value);
-                setTick((t) => t + 1);
+                setRev((t) => t + 1);
               }}
               className="w-16 accent-[#7C5DFF] cursor-pointer"
             />
@@ -321,7 +323,7 @@ export const GrooveSequencer: React.FC = () => {
                   <button
                     onClick={() => {
                       track.muted = !track.muted;
-                      setTick((t) => t + 1);
+                      setRev((t) => t + 1);
                     }}
                     className={`w-5 h-5 rounded text-[9px] font-mono font-bold flex items-center justify-center transition-all ${
                       track.muted
@@ -335,7 +337,7 @@ export const GrooveSequencer: React.FC = () => {
                   <button
                     onClick={() => {
                       track.solo = !track.solo;
-                      setTick((t) => t + 1);
+                      setRev((t) => t + 1);
                     }}
                     className={`w-5 h-5 rounded text-[9px] font-mono font-bold flex items-center justify-center transition-all ${
                       track.solo
@@ -440,7 +442,7 @@ export const GrooveSequencer: React.FC = () => {
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
                             step.pitchOffset = parseInt(e.target.value);
-                            setTick((t) => t + 1);
+                            setRev((t) => t + 1);
                           }}
                           className="bg-black/60 text-[8px] font-mono text-white rounded px-0.5 py-0 border-0 focus:outline-none cursor-pointer"
                         >
