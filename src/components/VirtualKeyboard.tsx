@@ -113,6 +113,69 @@ export const VirtualKeyboard: React.FC = () => {
     }
   };
 
+  // Touch event handlers for mobile
+  const activeTouchNotes = useRef<Map<number, number>>(new Map()); // Map touch ID to MIDI note
+
+  const handleTouchStart = (e: React.TouchEvent, midiNote: number) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      if (!activeTouchNotes.current.has(touch.identifier)) {
+        activeTouchNotes.current.set(touch.identifier, midiNote);
+        engine.playNote(midiNote, mapper.fixedVelocity);
+      }
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      // Find element under current touch position
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (element) {
+        // Walk up to find piano key element
+        const keyElement = element.closest('[id^="piano-key-"]');
+        if (keyElement && keyElement.id) {
+          const hoverMidiStr = keyElement.id.replace('piano-key-', '');
+          const hoverMidi = parseInt(hoverMidiStr, 10);
+
+          if (!isNaN(hoverMidi)) {
+            const previousMidi = activeTouchNotes.current.get(touch.identifier);
+            if (previousMidi !== hoverMidi) {
+              // Touch moved to a new key
+              if (previousMidi !== undefined) {
+                engine.stopNote(previousMidi);
+              }
+              activeTouchNotes.current.set(touch.identifier, hoverMidi);
+              engine.playNote(hoverMidi, mapper.fixedVelocity);
+            }
+          }
+        } else {
+          // Moved off piano keys
+          const previousMidi = activeTouchNotes.current.get(touch.identifier);
+          if (previousMidi !== undefined) {
+            engine.stopNote(previousMidi);
+            activeTouchNotes.current.delete(touch.identifier);
+          }
+        }
+      }
+    }
+  };
+
+  const handleTouchEndOrCancel = (e: React.TouchEvent) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      const midiNote = activeTouchNotes.current.get(touch.identifier);
+      if (midiNote !== undefined) {
+        engine.stopNote(midiNote);
+        activeTouchNotes.current.delete(touch.identifier);
+      }
+    }
+  };
+
   // Pitch bend wheel handlers
   const handlePitchMouseMove = (e: MouseEvent) => {
     if (!isPitchDragging.current) return;
@@ -440,7 +503,11 @@ export const VirtualKeyboard: React.FC = () => {
                 onMouseUp={() => handleKeyMouseUp(k.midiNote)}
                 onMouseEnter={(e) => handleKeyMouseEnter(e, k.midiNote)}
                 onMouseLeave={(e) => handleKeyMouseLeave(e, k.midiNote)}
-                className={`flex-1 relative flex flex-col justify-end items-center pb-2 border-r border-[#28282A] select-none cursor-pointer transition-all ${
+                onTouchStart={(e) => handleTouchStart(e, k.midiNote)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEndOrCancel}
+                onTouchCancel={handleTouchEndOrCancel}
+                className={`flex-1 relative flex flex-col justify-end items-center pb-2 border-r border-[#28282A] select-none cursor-pointer transition-all touch-none ${
                   isActive
                     ? 'bg-[#9B82FF] shadow-[inset_0_4px_12px_rgba(0,0,0,0.5)]'
                     : inScale
@@ -451,7 +518,7 @@ export const VirtualKeyboard: React.FC = () => {
                 {/* Computer Key Label */}
                 {k.computerKey && (
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono mb-1 transition-colors ${
+                    className={`hidden sm:flex w-6 h-6 rounded-full items-center justify-center text-[10px] font-bold font-mono mb-1 transition-colors ${
                       isActive
                         ? 'bg-[#0A0A0B] text-[#9B82FF] shadow'
                         : 'bg-[#18181B] text-[#E0E0E0] shadow-sm border border-[#28282A]'
@@ -493,12 +560,16 @@ export const VirtualKeyboard: React.FC = () => {
                 onMouseUp={() => handleKeyMouseUp(k.midiNote)}
                 onMouseEnter={(e) => handleKeyMouseEnter(e, k.midiNote)}
                 onMouseLeave={(e) => handleKeyMouseLeave(e, k.midiNote)}
+                onTouchStart={(e) => handleTouchStart(e, k.midiNote)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEndOrCancel}
+                onTouchCancel={handleTouchEndOrCancel}
                 style={{
                   left: `${leftPercent}%`,
                   width: `${widthPercent}%`,
                   height: '62%',
                 }}
-                className={`absolute top-0 z-10 flex flex-col justify-end items-center pb-2 rounded-b-md select-none cursor-pointer shadow-2xl transition-all border border-[#0A0A0B] ${
+                className={`absolute top-0 z-10 flex flex-col justify-end items-center pb-2 rounded-b-md select-none cursor-pointer shadow-2xl transition-all border border-[#0A0A0B] touch-none ${
                   isActive
                     ? 'bg-[#7C5DFF] shadow-[0_0_15px_rgba(124,93,255,0.6)]'
                     : inScale
@@ -509,7 +580,7 @@ export const VirtualKeyboard: React.FC = () => {
                 {/* Computer Key badge */}
                 {k.computerKey && (
                   <div
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold font-mono mb-1 ${
+                    className={`hidden sm:flex w-5 h-5 rounded-full items-center justify-center text-[9px] font-bold font-mono mb-1 ${
                       isActive ? 'bg-[#0A0A0B] text-[#9B82FF]' : 'bg-[#18181B] text-[#9B82FF] border border-[#28282A]'
                     }`}
                   >
@@ -530,7 +601,7 @@ export const VirtualKeyboard: React.FC = () => {
       </div>
 
       {/* Keyboard Quick Legend */}
-      <div className="mt-3 flex flex-wrap items-center justify-between text-[11px] text-[#9E9E9E] px-1 font-mono">
+      <div className="mt-3 hidden sm:flex flex-wrap items-center justify-between text-[11px] text-[#9E9E9E] px-1 font-mono">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#7C5DFF] inline-block shadow-[0_0_6px_rgba(124,93,255,0.6)]" />
