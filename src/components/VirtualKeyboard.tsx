@@ -113,15 +113,42 @@ export const VirtualKeyboard: React.FC = () => {
     }
   };
 
+  const handleKeyTouchStart = (e: React.TouchEvent, midiNote: number) => {
+    e.preventDefault(); // Prevent scroll/zoom
+    engine.playNote(midiNote, mapper.fixedVelocity);
+  };
+
+  const handleKeyTouchEnd = (e: React.TouchEvent, midiNote: number) => {
+    e.preventDefault();
+    engine.stopNote(midiNote);
+  };
+
+  const pitchTouchStartY = useRef(0);
+  const modTouchStartY = useRef(0);
+  const modStartVal = useRef(0);
+  const pitchStartVal = useRef(0);
+
   // Pitch bend wheel handlers
-  const handlePitchMouseMove = (e: MouseEvent) => {
-    if (!isPitchDragging.current) return;
-    const deltaY = -e.movementY * 4;
+  const handlePitchMove = (deltaY: number) => {
     setPitchBendVal((prev) => {
       const next = Math.max(-200, Math.min(200, prev + deltaY));
       engine.setPitchBend(next);
       return next;
     });
+  };
+
+  const handlePitchMouseMove = (e: MouseEvent) => {
+    if (!isPitchDragging.current) return;
+    handlePitchMove(-e.movementY * 4);
+  };
+
+  const handlePitchTouchMove = (e: TouchEvent) => {
+    if (!isPitchDragging.current) return;
+    e.preventDefault();
+    const currentY = e.touches[0].clientY;
+    const deltaY = pitchTouchStartY.current - currentY;
+    pitchTouchStartY.current = currentY; // Reset for next move
+    handlePitchMove(deltaY * 4);
   };
 
   const handlePitchMouseUp = () => {
@@ -132,6 +159,9 @@ export const VirtualKeyboard: React.FC = () => {
       engine.setPitchBend(0);
       window.removeEventListener('mousemove', handlePitchMouseMove);
       window.removeEventListener('mouseup', handlePitchMouseUp);
+      window.removeEventListener('touchmove', handlePitchTouchMove);
+      window.removeEventListener('touchend', handlePitchMouseUp);
+      window.removeEventListener('touchcancel', handlePitchMouseUp);
     }
   };
 
@@ -141,10 +171,16 @@ export const VirtualKeyboard: React.FC = () => {
     window.addEventListener('mouseup', handlePitchMouseUp);
   };
 
+  const handlePitchTouchStart = (e: React.TouchEvent) => {
+    isPitchDragging.current = true;
+    pitchTouchStartY.current = e.touches[0].clientY;
+    window.addEventListener('touchmove', handlePitchTouchMove, { passive: false });
+    window.addEventListener('touchend', handlePitchMouseUp);
+    window.addEventListener('touchcancel', handlePitchMouseUp);
+  };
+
   // Mod wheel handlers
-  const handleModMouseMove = (e: MouseEvent) => {
-    if (!isModDragging.current) return;
-    const deltaY = -e.movementY * 0.01;
+  const handleModMove = (deltaY: number) => {
     setModWheelVal((prev) => {
       const next = Math.max(0, Math.min(1, prev + deltaY));
       engine.setModWheel(next);
@@ -152,11 +188,28 @@ export const VirtualKeyboard: React.FC = () => {
     });
   };
 
+  const handleModMouseMove = (e: MouseEvent) => {
+    if (!isModDragging.current) return;
+    handleModMove(-e.movementY * 0.01);
+  };
+
+  const handleModTouchMove = (e: TouchEvent) => {
+    if (!isModDragging.current) return;
+    e.preventDefault();
+    const currentY = e.touches[0].clientY;
+    const deltaY = modTouchStartY.current - currentY;
+    modTouchStartY.current = currentY;
+    handleModMove(deltaY * 0.01);
+  };
+
   const handleModMouseUp = () => {
     if (isModDragging.current) {
       isModDragging.current = false;
       window.removeEventListener('mousemove', handleModMouseMove);
       window.removeEventListener('mouseup', handleModMouseUp);
+      window.removeEventListener('touchmove', handleModTouchMove);
+      window.removeEventListener('touchend', handleModMouseUp);
+      window.removeEventListener('touchcancel', handleModMouseUp);
     }
   };
 
@@ -164,6 +217,14 @@ export const VirtualKeyboard: React.FC = () => {
     isModDragging.current = true;
     window.addEventListener('mousemove', handleModMouseMove);
     window.addEventListener('mouseup', handleModMouseUp);
+  };
+
+  const handleModTouchStart = (e: React.TouchEvent) => {
+    isModDragging.current = true;
+    modTouchStartY.current = e.touches[0].clientY;
+    window.addEventListener('touchmove', handleModTouchMove, { passive: false });
+    window.addEventListener('touchend', handleModMouseUp);
+    window.addEventListener('touchcancel', handleModMouseUp);
   };
 
   // Separate white and black keys for proper piano overlap
@@ -377,8 +438,9 @@ export const VirtualKeyboard: React.FC = () => {
           <div className="flex flex-col items-center justify-between w-9 select-none">
             <span className="text-[9px] font-mono text-[#9E9E9E]">PITCH</span>
             <div
-              className="relative w-8 h-32 bg-[#0A0A0B] rounded border border-[#28282A] cursor-ns-resize overflow-hidden flex items-center justify-center group"
+              className="relative w-8 h-32 bg-[#0A0A0B] rounded border border-[#28282A] cursor-ns-resize overflow-hidden flex items-center justify-center group touch-none"
               onMouseDown={handlePitchMouseDown}
+              onTouchStart={handlePitchTouchStart}
               title="Pitch Bend (Drag or Up/Down Arrow)"
             >
               {/* Center line */}
@@ -401,8 +463,9 @@ export const VirtualKeyboard: React.FC = () => {
           <div className="flex flex-col items-center justify-between w-9 select-none">
             <span className="text-[9px] font-mono text-[#9E9E9E]">MOD</span>
             <div
-              className="relative w-8 h-32 bg-[#0A0A0B] rounded border border-[#28282A] cursor-ns-resize overflow-hidden flex items-end group"
+              className="relative w-8 h-32 bg-[#0A0A0B] rounded border border-[#28282A] cursor-ns-resize overflow-hidden flex items-end group touch-none"
               onMouseDown={handleModMouseDown}
+              onTouchStart={handleModTouchStart}
               title="Modulation Wheel (Drag up)"
             >
               {/* Level fill */}
@@ -440,7 +503,10 @@ export const VirtualKeyboard: React.FC = () => {
                 onMouseUp={() => handleKeyMouseUp(k.midiNote)}
                 onMouseEnter={(e) => handleKeyMouseEnter(e, k.midiNote)}
                 onMouseLeave={(e) => handleKeyMouseLeave(e, k.midiNote)}
-                className={`flex-1 relative flex flex-col justify-end items-center pb-2 border-r border-[#28282A] select-none cursor-pointer transition-all ${
+                onTouchStart={(e) => handleKeyTouchStart(e, k.midiNote)}
+                onTouchEnd={(e) => handleKeyTouchEnd(e, k.midiNote)}
+                onTouchCancel={(e) => handleKeyTouchEnd(e, k.midiNote)}
+                className={`flex-1 relative flex flex-col justify-end items-center pb-2 border-r border-[#28282A] select-none cursor-pointer transition-all touch-none ${
                   isActive
                     ? 'bg-[#9B82FF] shadow-[inset_0_4px_12px_rgba(0,0,0,0.5)]'
                     : inScale
@@ -493,12 +559,15 @@ export const VirtualKeyboard: React.FC = () => {
                 onMouseUp={() => handleKeyMouseUp(k.midiNote)}
                 onMouseEnter={(e) => handleKeyMouseEnter(e, k.midiNote)}
                 onMouseLeave={(e) => handleKeyMouseLeave(e, k.midiNote)}
+                onTouchStart={(e) => handleKeyTouchStart(e, k.midiNote)}
+                onTouchEnd={(e) => handleKeyTouchEnd(e, k.midiNote)}
+                onTouchCancel={(e) => handleKeyTouchEnd(e, k.midiNote)}
                 style={{
                   left: `${leftPercent}%`,
                   width: `${widthPercent}%`,
                   height: '62%',
                 }}
-                className={`absolute top-0 z-10 flex flex-col justify-end items-center pb-2 rounded-b-md select-none cursor-pointer shadow-2xl transition-all border border-[#0A0A0B] ${
+                className={`absolute top-0 z-10 flex flex-col justify-end items-center pb-2 rounded-b-md select-none cursor-pointer shadow-2xl transition-all border border-[#0A0A0B] touch-none ${
                   isActive
                     ? 'bg-[#7C5DFF] shadow-[0_0_15px_rgba(124,93,255,0.6)]'
                     : inScale
